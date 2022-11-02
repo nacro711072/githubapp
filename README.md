@@ -13,9 +13,9 @@
 
 1. 採用 MVVM + repository
 2. 使用Koin DI
-3. UI 的部分，整體來說是使用 Compose UI 建構。但為符合考題, 清單的部分預設採用 `RecyclerView` 實作。如果清單也要換成 Compose UI, 可以將 `MainActivity.ky:43`裡的 `useRecyclerView` 改成false
+3. UI 的部分，整體來說是使用 Compose UI 建構。但為符合考題, 清單的部分預設採用 `RecyclerView` 實作。如果清單也要換成 Compose UI, 可以將 `MainActivity.kt:43`裡的 `useRecyclerView` 改成false
 ```Kotlin
-// MainActivity.ky:43
+// MainActivity.kt:43
 UserListScreen(userList = userList, useRecyclerView = true) // useRecyclerView = false, 即直接使用LazyColumn
 ```
 4. API request 則為 OkHttp + Retrofit
