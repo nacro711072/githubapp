@@ -20,7 +20,7 @@ UserListScreen(userList = userList, useRecyclerView = true) // useRecyclerView =
 ```
 4. API request 則為 OkHttp + Retrofit
 5. 圖片處理使用 `Coil`, 一個專門為kotlin 處理圖片的 package, 用法跟`glide` 極為相似
-6. viewModel 使用StateFlow 取代 viewModel.
+6. viewModel 使用StateFlow 取代 LiveData.
 
 # 其他
 若期望為 傳統完整的XML 方式構築畫面，我也有預備一份，需要可以說。
