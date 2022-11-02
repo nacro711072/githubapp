@@ -1,4 +1,4 @@
-package com.nacro.compose.githubapp.ui.page.main
+package com.nacro.compose.githubapp.ui.page.main.adapter
 
 import android.view.LayoutInflater
 import android.view.ViewGroup
@@ -11,7 +11,7 @@ import androidx.recyclerview.widget.RecyclerView.ViewHolder
 import coil.load
 import com.nacro.compose.githubapp.R
 import com.nacro.compose.githubapp.ext.openWeb
-import com.nacro.compose.githubapp.ui.page.main.vm.UserItem
+import com.nacro.compose.githubapp.ui.page.main.data.UserItem
 import com.nacro.compose.githubapp.ui.transformation.CircleStrokeTransformation
 import com.nacro.compose.githubapp.ui.transformation.Stroke
 

@@ -1,4 +1,4 @@
-package com.nacro.compose.githubapp.ui.page.main.vm
+package com.nacro.compose.githubapp.ui.page.main.data
 
 data class UserItem(
     val id: Int,

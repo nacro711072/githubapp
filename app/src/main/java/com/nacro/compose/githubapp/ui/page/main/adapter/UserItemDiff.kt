@@ -1,7 +1,7 @@
-package com.nacro.compose.githubapp.ui.page.main
+package com.nacro.compose.githubapp.ui.page.main.adapter
 
 import androidx.recyclerview.widget.DiffUtil
-import com.nacro.compose.githubapp.ui.page.main.vm.UserItem
+import com.nacro.compose.githubapp.ui.page.main.data.UserItem
 
 class UserItemDiff: DiffUtil.ItemCallback<UserItem>() {
     override fun areItemsTheSame(oldItem: UserItem, newItem: UserItem): Boolean {

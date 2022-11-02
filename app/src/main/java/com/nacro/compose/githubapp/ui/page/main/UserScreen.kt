@@ -1,6 +1,5 @@
 package com.nacro.compose.githubapp.ui.page.main
 
-import android.util.Log
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,7 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Brush.Companion.linearGradient
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -33,8 +31,9 @@ import androidx.recyclerview.widget.RecyclerView
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.nacro.compose.githubapp.ext.OnBottomReached
-import com.nacro.compose.githubapp.ui.page.main.vm.UserItem
+import com.nacro.compose.githubapp.ui.page.main.data.UserItem
 import com.nacro.compose.githubapp.ext.openWeb
+import com.nacro.compose.githubapp.ui.page.main.adapter.UserListAdapter
 import com.nacro.compose.githubapp.ui.theme.ShimmerColors
 import com.nacro.compose.githubapp.ui.transformation.CircleStrokeTransformation
 import com.nacro.compose.githubapp.ui.transformation.Stroke
