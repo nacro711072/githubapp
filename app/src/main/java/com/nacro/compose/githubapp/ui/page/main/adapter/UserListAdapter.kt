@@ -37,7 +37,7 @@ class UserListAdapter: ListAdapter<UserItem, ViewHolder>(UserItemDiff()) {
         nameView.text = item.name
 
         holder.itemView.setOnClickListener { v ->
-            v.context.openWeb("http://www.google.com")
+            v.context.openWeb(item.userHtmlUrl)
         }
     }
 }

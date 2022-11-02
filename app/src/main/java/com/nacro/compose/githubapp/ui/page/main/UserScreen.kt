@@ -109,12 +109,13 @@ private fun LazyColListView(
     val context = LocalContext.current
     val lazyState = rememberLazyListState()
     lazyState.OnBottomReached(onBottomReached)
+
     LazyColumn(Modifier.fillMaxSize(), state = lazyState) {
         items(items = userList, key = { item ->
             item.id
         }) { item ->
             UserItemCell(user = item) {
-                context.openWeb("http://www.google.com")
+                context.openWeb(item.userHtmlUrl)
             }
             Divider(
                 Modifier
