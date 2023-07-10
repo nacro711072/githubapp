@@ -1,0 +1,51 @@
+name: 'Bomb Version'
+on:
+  push:
+    branches:
+      - 'test/*'
+
+  workflow_dispatch:
+    inputs:
+      targetVersionName:
+        description: "The target version name will upgrade"
+        required: true
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Upgrade version
+        run: |
+          # Init 
+          VERSION_INPUT=${{ github.event.inputs.targetVersionName }}
+          
+          # Check validation with format "a.b.c-x"
+          if [[ ! $VERSION_INPUT =~ $rx ]]; then
+          exit "Invalidate version"
+          fi
+          
+          # Parse input
+          newMajor="$(echo VERSION_INPUT | cut -d'.' -f1)"
+          newMinor="$(echo VERSION_INPUT | cut -d'.' -f2)"
+          newPatch="$(echo VERSION_INPUT | cut -d'.' -f3)"
+          #          newStaging="$(echo VERSION_INPUT | cut -d'-' -f2)"  # check whether exist
+          
+          echo "success"
+
+#          #Write file
+#          sed -i '' -E "s/versionMajor = ([0-9]+)/$newMajor/" build.gradle
+#          sed -i '' -E "s/versionMinor = ([0-9]+)/$newMinor/" build.gradle
+#          sed -i '' -E "s/versionPatch = ([0-9]+)/$newPatch/" build.gradle
+#      #          sed -i '' -E "s/versionStaging = ([0-9]+)/$newStaging/" build.gradle # check whether exist
+#
+#      - name: Commit and push changes
+#        run: |
+#          git config user.email "github-actions@myfunnow.com"
+#          git config user.name "Github Actions"
+#          git commit -m "Change version name"
+#          git push origin HEAD
+
+#      Push to firebase and slack
