@@ -1,0 +1,74 @@
+name: Produce change log
+
+on:
+  workflow_call:
+    inputs:
+      new_branch:
+        type: string
+      pr_titles:
+        type: string
+        required: true
+      filename:
+        type: string
+        required: true
+        default: 'changelog.txt'
+      changelog_override:
+        type: boolean
+        default: true
+
+
+jobs:
+  produce-change-log:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout repo"
+        id: checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.new_branch }}
+          fetch-depth: 0
+
+      - name: "Produce changelog"
+        uses: actions/github-script@v6
+        id: write-changelog
+        env:
+          PR_TITLES: ${{ inputs.pr_titles }}
+          CHANGE_LOG_FILE_NAME: ${{ inputs.filename }}
+        with:
+          script: |
+            const fs = require("fs");
+            
+            titles = process.env.PR_TITLES.trim().split(',')
+            var content = ""
+            for (let i in titles) {
+              const title = titles[i]
+              if (title) {
+                content += `- ${title}\n`
+              }
+            }
+            
+            if (${{ inputs.changelog_override == true }}) {
+              fs.writeFileSync(process.env.CHANGE_LOG_FILE_NAME, content);
+            } else {
+              fs.appendFileSync(process.env.CHANGE_LOG_FILE_NAME, content);
+            }
+            core.setOutput("changelog", content)
+
+      - name: "Git commit"
+        id: git
+        run: |
+          git config user.email "${{ secrets.ACTION_BOT_EMAIL }}"
+          git config user.name "${{ secrets.ACTION_BOT_NAME }}"
+          git add --all
+          if [[ -z "$(git status --porcelain)" ]]; then
+             echo "push=false" >> $GITHUB_OUTPUT
+          else
+             git commit -m "Update changelog" -a
+             echo "push=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: "Push changes"
+        if: steps.git.outputs.push == 'true'
+        uses: ad-m/github-push-action@master
+        with:
+          branch: ${{ inputs.new_branch }}

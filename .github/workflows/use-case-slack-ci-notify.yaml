@@ -1,0 +1,32 @@
+name: Slack CI notify
+
+on:
+  workflow_call:
+    inputs:
+      is_success:
+        type: boolean
+        required: true
+
+jobs:
+  Slack-notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify slack success
+        if: ${{ inputs.is_success }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TEST_TOKEN }}
+        uses: voxmedia/github-action-slack-notify-build@v1.6.0
+        with:
+          channel_id: C05GF54JJR4
+          status: SUCCESS
+          color: good
+
+      - name: Notify slack fail
+        if: ${{ !inputs.is_success }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TEST_TOKEN }}
+        uses: voxmedia/github-action-slack-notify-build@v1.6.0
+        with:
+          channel_id: C05GF54JJR4
+          status: FAILED
+          color: danger

@@ -1,0 +1,60 @@
+name: Bump version
+
+on:
+  workflow_call:
+    inputs:
+      new_branch:
+        type: string
+      version:
+        type: string
+        required: true
+      version_file:
+        type: string
+        default: app/build.gradle
+
+jobs:
+  Bump-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout repo"
+        id: checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.new_branch }}
+          fetch-depth: 0
+
+
+      - name: "Upgrade version"
+        run: |
+          # Init
+          version="${{ inputs.version }}"
+          rx="^([0-9]+)\.([0-9]+)\.([0-9]+)(-([0-9]+))?"
+          
+          # Check validation with format "a.b.c-x"
+          if [[ ! $version =~ $rx ]]; then
+           exit "Invalidate version input"
+          fi
+          
+          
+          # Write file
+          sed -i "s/versionName \"[^\"]*\"/versionName \"$version\"/g" ${{ inputs.version_file }}
+#          sed -i -E "s/versionName (\"[0-9]+\")/versionName = $version/" ${{ inputs.version_file }}
+
+      - name: "Git commit"
+        id: git
+        run: |
+          git config user.email nacro711072@yahoo.com.tw
+          git config user.name nacro711072[bot]
+          git add --all
+          if [[ -z "$(git status --porcelain)" ]]; then
+             echo "push=false" >> $GITHUB_OUTPUT
+          else
+             git commit -m "Bump version ${{ inputs.version }}" -a
+             echo "push=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: "Push changes"
+        if: steps.git.outputs.push == 'true'
+        uses: ad-m/github-push-action@master
+        with:
+          branch: ${{ inputs.new_branch }}

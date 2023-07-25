@@ -1,0 +1,104 @@
+name: Staging deploy flow
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_version:
+        description: "The target version (x.x.x-x)"
+        type: string
+        required: true
+
+env:
+  beta_branch: beta/${{ inputs.target_version }}
+
+
+jobs:
+  Fetch-PR-number:
+    runs-on: ubuntu-latest
+    outputs:
+      beta_branch: ${{ env.beta_branch }}
+      titles: ${{ steps.fetch-pr.outputs.titles }}
+    steps:
+      - name: "Checkout repo"
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: "Fetch PR numbers"
+        id: pr
+        run: |
+          latestTag=$(git rev-list --tags --skip=0 --max-count=1)
+
+          numbers=$(git log --pretty=format:"%s" ${latestTag}.. | sed -n 's/.*#\([[:digit:]]\{1,\}\).*/\1/p')
+          [[ -z $numbers ]] && exit 1
+
+          numbers=$(echo $numbers | tr "\n" ", ")
+
+          echo "numbers=${numbers::-1}" >> $GITHUB_OUTPUT
+
+      - name: "Fetch PR head branch"
+        uses: actions/github-script@v6
+        id: fetch-pr
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.numbers }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            numbers = process.env.PR_NUMBER.trim().split(',')
+            branches = ""
+            titles = ""
+            for (let i in numbers) {
+              const pr = await github.rest.pulls.get({
+                pull_number: numbers[i],
+                owner: context.repo.owner,
+                repo: context.repo.repo
+              })
+              branches += `${pr.data.head.ref},`
+              titles += `${pr.data.title},`
+            }
+
+            // Remove the trailing delimiter (last comma) from the result
+            branches=branches.slice(0, -1)
+            titles=titles.slice(0, -1)
+
+            core.setOutput("branches", branches)
+            core.setOutput("titles", titles)
+
+      - name: "Merge PR branch"
+        run: |
+          git config user.email "${{ secrets.ACTION_BOT_EMAIL }}"
+          git config user.name "${{ secrets.ACTION_BOT_NAME }}"
+
+          IFS=','
+          branches="${{ steps.fetch-pr.outputs.branches }}"
+          current_branch=$(git rev-parse --abbrev-ref HEAD)
+          
+          for branch in $branches; do
+            git fetch origin $branch
+            git merge --squash "origin/$branch" 
+            git commit -m "Merge branch '$branch' into $current_branch"
+          done
+
+      - name: "Push changes"
+        uses: ad-m/github-push-action@master
+        with:
+          branch: ${{ env.beta_branch }}
+
+  Produce-changelog:
+    needs: [ Fetch-PR-number ]
+    uses: ./.github/workflows/use-case-changelog.yaml
+    if: ${{ success() }}
+    secrets: inherit
+    with:
+      new_branch: ${{ needs.Merge-PR.outputs.beta_branch }}
+      pr_titles: ${{ needs.Merge-PR.outputs.titles }}
+      filename: 'changelog.txt'
+
+  Bump-version:
+    needs: [ Fetch-PR-number, Produce-changelog ]
+    uses: ./.github/workflows/use-case-bump-version.yaml
+    secrets: inherit
+    with:
+      new_branch: ${{ needs.Merge-PR.outputs.beta_branch }}
+      version: ${{ inputs.target_version }}
+
