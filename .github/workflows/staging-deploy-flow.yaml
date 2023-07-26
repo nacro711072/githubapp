@@ -9,14 +9,13 @@ on:
         required: true
 
 env:
-  beta_branch: beta/${{ inputs.target_version }}
-
+  staging_branch: staging/${{ inputs.target_version }}
 
 jobs:
   Fetch-PR-number:
     runs-on: ubuntu-latest
     outputs:
-      beta_branch: ${{ env.beta_branch }}
+      staging_branch: ${{ env.staging_branch }}
       titles: ${{ steps.fetch-pr.outputs.titles }}
     steps:
       - name: "Checkout repo"
@@ -24,16 +23,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: "Create beta branch"
+        id: new-branch
+        run: |
+          git checkout -b ${{ env.staging_branch }}
+
       - name: "Fetch PR numbers"
         id: pr
         run: |
           latestTag=$(git rev-list --tags --skip=0 --max-count=1)
-
+          
           numbers=$(git log --pretty=format:"%s" ${latestTag}.. | sed -n 's/.*#\([[:digit:]]\{1,\}\).*/\1/p')
           [[ -z $numbers ]] && exit 1
 
           numbers=$(echo $numbers | tr "\n" ", ")
-
+          
           echo "numbers=${numbers::-1}" >> $GITHUB_OUTPUT
 
       - name: "Fetch PR head branch"
@@ -82,7 +86,7 @@ jobs:
       - name: "Push changes"
         uses: ad-m/github-push-action@master
         with:
-          branch: ${{ env.beta_branch }}
+          branch: ${{ env.staging_branch }}
 
   Produce-changelog:
     needs: [ Fetch-PR-number ]
@@ -90,8 +94,8 @@ jobs:
     if: ${{ success() }}
     secrets: inherit
     with:
-      new_branch: ${{ needs.Merge-PR.outputs.beta_branch }}
-      pr_titles: ${{ needs.Merge-PR.outputs.titles }}
+      new_branch: ${{ needs.Fetch-PR-number.outputs.staging_branch }}
+      pr_titles: ${{ needs.Fetch-PR-number.outputs.titles }}
       filename: 'changelog.txt'
 
   Bump-version:
@@ -99,6 +103,23 @@ jobs:
     uses: ./.github/workflows/use-case-bump-version.yaml
     secrets: inherit
     with:
-      new_branch: ${{ needs.Merge-PR.outputs.beta_branch }}
       version: ${{ inputs.target_version }}
 
+  Merge-to-release:
+    needs: [ Bump-version ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout repo"
+        uses: actions/checkout@v3
+        with:
+          ref: release
+          fetch-depth: 0
+
+      - name: "Merge to release"
+        run: |
+          git merge --squash "origin/${{ env.staging_branch }}"
+          git commit -m "release staging version: '${{ target_version }}'"
+      - name: "Push release"
+        uses: ad-m/github-push-action@master
+        with:
+          branch: release
