@@ -36,6 +36,7 @@ class MainViewModel(
             _users.collect {
                 stateHandle.set(USER_STATE_HANDLE_KEY, it)
             }
+            // TODO: test github action
         }
     }
 
