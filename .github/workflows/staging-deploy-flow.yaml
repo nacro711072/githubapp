@@ -1,6 +1,9 @@
 name: Staging deploy flow
 
 on:
+#  push:
+#    branches:
+#      - fakemaster
   workflow_dispatch:
     inputs:
       target_version:
@@ -9,15 +12,22 @@ on:
         required: true
 
 env:
-  staging_branch: staging/${{ inputs.target_version }}
+#  staging_branch: staging/${{ inputs.target_version }}
+  staging_branch: staging/1.1.1
 
 jobs:
-  Fetch-PR-number:
+  Build-changelog:
     runs-on: ubuntu-latest
     outputs:
       staging_branch: ${{ env.staging_branch }}
       titles: ${{ steps.fetch-pr.outputs.titles }}
     steps:
+#      - name: Fail if branch is not main
+#        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/fakemaster'
+#        run: |
+#          echo "This workflow should not be triggered with workflow_dispatch on a branch other than fakemaster"
+#          exit 1
+#
       - name: "Checkout repo"
         uses: actions/checkout@v3
         with:
@@ -28,82 +38,24 @@ jobs:
         run: |
           git checkout -b ${{ env.staging_branch }}
 
-      - name: "Fetch PR numbers"
-        id: pr
-        run: |
-          latestTag=$(git rev-list --tags --skip=0 --max-count=1)
-          
-          numbers=$(git log --pretty=format:"%s" ${latestTag}.. | sed -n 's/.*#\([[:digit:]]\{1,\}\).*/\1/p')
-          [[ -z $numbers ]] && exit 1
-
-          numbers=$(echo $numbers | tr "\n" ", ")
-          
-          echo "numbers=${numbers::-1}" >> $GITHUB_OUTPUT
-
-      - name: "Fetch PR head branch"
-        uses: actions/github-script@v6
-        id: fetch-pr
-        env:
-          PR_NUMBER: ${{ steps.pr.outputs.numbers }}
+      - name: "Build Changelog"
+        id: changelog
+        uses: mikepenz/release-changelog-builder-action@3.7.2
         with:
-          github-token: ${{ github.token }}
-          script: |
-            numbers = process.env.PR_NUMBER.trim().split(',')
-            branches = ""
-            titles = ""
-            for (let i in numbers) {
-              const pr = await github.rest.pulls.get({
-                pull_number: numbers[i],
-                owner: context.repo.owner,
-                repo: context.repo.repo
-              })
-              branches += `${pr.data.head.ref},`
-              titles += `${pr.data.title},`
-            }
-
-            // Remove the trailing delimiter (last comma) from the result
-            branches=branches.slice(0, -1)
-            titles=titles.slice(0, -1)
-
-            core.setOutput("branches", branches)
-            core.setOutput("titles", titles)
-
-      - name: "Merge PR branch"
-        run: |
-          git config user.email "${{ secrets.ACTION_BOT_EMAIL }}"
-          git config user.name "${{ secrets.ACTION_BOT_NAME }}"
-
-          IFS=','
-          branches="${{ steps.fetch-pr.outputs.branches }}"
-          current_branch=$(git rev-parse --abbrev-ref HEAD)
-          
-          for branch in $branches; do
-            git fetch origin $branch
-            git merge --squash "origin/$branch" 
-            git commit -m "Merge branch '$branch' into $current_branch"
-          done
+          configuration: ".github/changelog_configs.json"
 
       - name: "Push changes"
         uses: ad-m/github-push-action@master
         with:
           branch: ${{ env.staging_branch }}
 
-  Produce-changelog:
-    needs: [ Fetch-PR-number ]
-    uses: ./.github/workflows/use-case-changelog.yaml
-    if: ${{ success() }}
-    secrets: inherit
-    with:
-      new_branch: ${{ needs.Fetch-PR-number.outputs.staging_branch }}
-      pr_titles: ${{ needs.Fetch-PR-number.outputs.titles }}
-      filename: 'changelog.txt'
-
   Bump-version:
-    needs: [ Fetch-PR-number, Produce-changelog ]
+    needs: [ Build-changelog ]
     uses: ./.github/workflows/use-case-bump-version.yaml
     secrets: inherit
     with:
-      version: ${{ inputs.target_version }}
+#      version: ${{ inputs.target_version }}
+      version: 1.1.1
 
   Merge-to-release:
     needs: [ Bump-version ]
@@ -118,7 +70,7 @@ jobs:
       - name: "Merge to release"
         run: |
           git merge --squash "origin/${{ env.staging_branch }}"
-          git commit -m "release staging version: '${{ target_version }}'"
+          git commit -m "release staging version: '${{ env.staging_branch }}'"
       - name: "Push release"
         uses: ad-m/github-push-action@master
         with:
