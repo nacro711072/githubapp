@@ -31,6 +31,7 @@ class MainActivity : ComponentActivity() {
                 Toast.makeText(this@MainActivity, it, Toast.LENGTH_LONG).show()
             }
         }
+//                    TODO: add todo2
 
         setContent {
             GithubappTheme {

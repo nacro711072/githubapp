@@ -1,0 +1,15 @@
+{
+  "categories": [
+    {
+      "title": "## 🚀 Features",
+      "labels": ["feature"]
+    },
+    {
+      "title": "## 🐛 Bugfix",
+      "labels": ["bug"]
+    }
+  ],
+  "template": "${{CHANGELOG}}\n##Other\n${{UNCATEGORIZED}}",
+  "pr_template": "- #{{TITLE}}",
+  "empty_template": "No changes"
+}

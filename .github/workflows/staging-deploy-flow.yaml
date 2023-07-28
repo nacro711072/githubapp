@@ -12,12 +12,17 @@ env:
   staging_branch: staging/${{ inputs.target_version }}
 
 jobs:
-  Fetch-PR-number:
+  Build-changelog:
     runs-on: ubuntu-latest
     outputs:
       staging_branch: ${{ env.staging_branch }}
-      titles: ${{ steps.fetch-pr.outputs.titles }}
     steps:
+      - name: Fail if branch is not master
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/master'
+        run: |
+          echo "This workflow should not be triggered with workflow_dispatch on a branch other than master"
+          exit 1
+
       - name: "Checkout repo"
         uses: actions/checkout@v3
         with:
@@ -25,84 +30,46 @@ jobs:
 
       - name: "Create beta branch"
         id: new-branch
-        run: |
+        run: |          
           git checkout -b ${{ env.staging_branch }}
 
-      - name: "Fetch PR numbers"
-        id: pr
+      # release-changelog-builder-action 預設是抓 (second closest - latest tag) 之間的commit
+      # 但staging 不會有正式的tag, 所以要抓當前最新的 commit 給參數 toTag, latest tag 給 fromTag
+      - name: "Arrange change-log commit"
+        if: startsWith(github.ref, 'refs/tags/') != true
+        id: commit_range
         run: |
           latestTag=$(git rev-list --tags --skip=0 --max-count=1)
-          
-          numbers=$(git log --pretty=format:"%s" ${latestTag}.. | sed -n 's/.*#\([[:digit:]]\{1,\}\).*/\1/p')
-          [[ -z $numbers ]] && exit 1
+          echo "fromTag=$latestTag" >> $GITHUB_OUTPUT
+          echo "toTag=$GITHUB_REF" >> $GITHUB_OUTPUT
 
-          numbers=$(echo $numbers | tr "\n" ", ")
-          
-          echo "numbers=${numbers::-1}" >> $GITHUB_OUTPUT
-
-      - name: "Fetch PR head branch"
-        uses: actions/github-script@v6
-        id: fetch-pr
-        env:
-          PR_NUMBER: ${{ steps.pr.outputs.numbers }}
+      - name: "Build Changelog"
+        id: changelog_builder
+        uses: mikepenz/release-changelog-builder-action@v3.7.2
         with:
-          github-token: ${{ github.token }}
-          script: |
-            numbers = process.env.PR_NUMBER.trim().split(',')
-            branches = ""
-            titles = ""
-            for (let i in numbers) {
-              const pr = await github.rest.pulls.get({
-                pull_number: numbers[i],
-                owner: context.repo.owner,
-                repo: context.repo.repo
-              })
-              branches += `${pr.data.head.ref},`
-              titles += `${pr.data.title},`
-            }
+          fromTag: ${{ steps.commit_range.outputs.fromTag }}
+          toTag: ${{ steps.commit_range.outputs.toTag }}
+          configuration: ".github/changelog_configs.json"
+          outputFile: "changelog.txt"
 
-            // Remove the trailing delimiter (last comma) from the result
-            branches=branches.slice(0, -1)
-            titles=titles.slice(0, -1)
-
-            core.setOutput("branches", branches)
-            core.setOutput("titles", titles)
-
-      - name: "Merge PR branch"
+      - name: Commit files
         run: |
-          git config user.email "${{ secrets.ACTION_BOT_EMAIL }}"
-          git config user.name "${{ secrets.ACTION_BOT_NAME }}"
-
-          IFS=','
-          branches="${{ steps.fetch-pr.outputs.branches }}"
-          current_branch=$(git rev-parse --abbrev-ref HEAD)
-          
-          for branch in $branches; do
-            git fetch origin $branch
-            git merge --squash "origin/$branch" 
-            git commit -m "Merge branch '$branch' into $current_branch"
-          done
+          git config user.email ${{ secrets.ACTION_BOT_EMAIL }}
+          git config user.name ${{ secrets.ACTION_BOT_NAME }}
+          git add .
+          git commit -m "Update changelog"
 
       - name: "Push changes"
         uses: ad-m/github-push-action@master
         with:
           branch: ${{ env.staging_branch }}
 
-  Produce-changelog:
-    needs: [ Fetch-PR-number ]
-    uses: ./.github/workflows/use-case-changelog.yaml
-    if: ${{ success() }}
-    secrets: inherit
-    with:
-      new_branch: ${{ needs.Fetch-PR-number.outputs.staging_branch }}
-      pr_titles: ${{ needs.Fetch-PR-number.outputs.titles }}
-      filename: 'changelog.txt'
-
   Bump-version:
-    needs: [ Fetch-PR-number, Produce-changelog ]
+    needs: [ Build-changelog ]
     uses: ./.github/workflows/use-case-bump-version.yaml
     secrets: inherit
     with:
+      new_branch: ${{ needs.Build-changelog.outputs.staging_branch }}
       version: ${{ inputs.target_version }}
 
   Merge-to-release:
@@ -117,9 +84,16 @@ jobs:
 
       - name: "Merge to release"
         run: |
+          git config user.email ${{ secrets.ACTION_BOT_EMAIL }}
+          git config user.name ${{ secrets.ACTION_BOT_NAME }}
           git merge --squash "origin/${{ env.staging_branch }}"
-          git commit -m "release staging version: '${{ target_version }}'"
+          git commit -m "release staging version: '${{ env.staging_branch }}'"
+
       - name: "Push release"
         uses: ad-m/github-push-action@master
         with:
           branch: release
+
+      - name: "Delete staging branch"
+        run: |
+          git push origin -d ${{ env.staging_branch }}
