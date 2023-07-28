@@ -1,9 +1,6 @@
 name: Staging deploy flow
 
 on:
-#  push:
-#    branches:
-#      - fakemaster
   workflow_dispatch:
     inputs:
       target_version:
@@ -12,22 +9,20 @@ on:
         required: true
 
 env:
-#  staging_branch: staging/${{ inputs.target_version }}
-  staging_branch: staging/1.1.1
+  staging_branch: staging/${{ inputs.target_version }}
 
 jobs:
   Build-changelog:
     runs-on: ubuntu-latest
     outputs:
       staging_branch: ${{ env.staging_branch }}
-      titles: ${{ steps.fetch-pr.outputs.titles }}
     steps:
-#      - name: Fail if branch is not main
-#        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/fakemaster'
-#        run: |
-#          echo "This workflow should not be triggered with workflow_dispatch on a branch other than fakemaster"
-#          exit 1
-#
+      - name: Fail if branch is not master
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/master'
+        run: |
+          echo "This workflow should not be triggered with workflow_dispatch on a branch other than master"
+          exit 1
+
       - name: "Checkout repo"
         uses: actions/checkout@v3
         with:
@@ -35,14 +30,34 @@ jobs:
 
       - name: "Create beta branch"
         id: new-branch
-        run: |
+        run: |          
           git checkout -b ${{ env.staging_branch }}
 
+      # release-changelog-builder-action 預設是抓 (second closest - latest tag) 之間的commit
+      # 但staging 不會有正式的tag, 所以要抓當前最新的 commit 給參數 toTag, latest tag 給 fromTag
+      - name: "Arrange change-log commit"
+        if: startsWith(github.ref, 'refs/tags/') != true
+        id: commit_range
+        run: |
+          latestTag=$(git rev-list --tags --skip=0 --max-count=1)
+          echo "fromTag=$latestTag" >> $GITHUB_OUTPUT
+          echo "toTag=$GITHUB_REF" >> $GITHUB_OUTPUT
+
       - name: "Build Changelog"
-        id: changelog
-        uses: mikepenz/release-changelog-builder-action@3.7.2
+        id: changelog_builder
+        uses: mikepenz/release-changelog-builder-action@v3.7.2
         with:
+          fromTag: ${{ steps.commit_range.outputs.fromTag }}
+          toTag: ${{ steps.commit_range.outputs.toTag }}
           configuration: ".github/changelog_configs.json"
+          outputFile: "changelog.txt"
+
+      - name: Commit files
+        run: |
+          git config user.email ${{ secrets.ACTION_BOT_EMAIL }}
+          git config user.name ${{ secrets.ACTION_BOT_NAME }}
+          git add .
+          git commit -m "Update changelog"
 
       - name: "Push changes"
         uses: ad-m/github-push-action@master
@@ -54,8 +69,8 @@ jobs:
     uses: ./.github/workflows/use-case-bump-version.yaml
     secrets: inherit
     with:
-#      version: ${{ inputs.target_version }}
-      version: 1.1.1
+      new_branch: ${{ needs.Build-changelog.outputs.staging_branch }}
+      version: ${{ inputs.target_version }}
 
   Merge-to-release:
     needs: [ Bump-version ]
@@ -69,9 +84,16 @@ jobs:
 
       - name: "Merge to release"
         run: |
+          git config user.email ${{ secrets.ACTION_BOT_EMAIL }}
+          git config user.name ${{ secrets.ACTION_BOT_NAME }}
           git merge --squash "origin/${{ env.staging_branch }}"
           git commit -m "release staging version: '${{ env.staging_branch }}'"
+
       - name: "Push release"
         uses: ad-m/github-push-action@master
         with:
           branch: release
+
+      - name: "Delete staging branch"
+        run: |
+          git push origin -d ${{ env.staging_branch }}
