@@ -18,9 +18,9 @@ jobs:
       staging_branch: ${{ env.staging_branch }}
     steps:
       - name: Fail if branch is not master
-        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/master'
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/fakemaster'
         run: |
-          echo "This workflow should not be triggered with workflow_dispatch on a branch other than master"
+          echo "This workflow should not be triggered with workflow_dispatch on a branch other than fakemaster"
           exit 1
 
       - name: "Checkout repo"
@@ -72,6 +72,7 @@ jobs:
       new_branch: ${{ needs.Build-changelog.outputs.staging_branch }}
       version: ${{ inputs.target_version }}
 
+
   Merge-to-release:
     needs: [ Bump-version ]
     runs-on: ubuntu-latest
@@ -79,21 +80,69 @@ jobs:
       - name: "Checkout repo"
         uses: actions/checkout@v3
         with:
-          ref: release
+          ref: ${{ env.staging_branch }}
           fetch-depth: 0
 
-      - name: "Merge to release"
-        run: |
-          git config user.email ${{ secrets.ACTION_BOT_EMAIL }}
-          git config user.name ${{ secrets.ACTION_BOT_NAME }}
-          git merge --squash "origin/${{ env.staging_branch }}"
-          git commit -m "release staging version: '${{ env.staging_branch }}'"
-
-      - name: "Push release"
-        uses: ad-m/github-push-action@master
+      - name: Create Pull Request
+        id: create-pr
+        uses: actions/github-script@v6
+        env:
+          BASE: "fakemaster"
+          HEAD: ${{ env.staging_branch }}
         with:
-          branch: release
+          script: |
+            const { data: pull } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: "Staging APP version rollout",
+              head: process.env.HEAD,
+              base: process.env.BASE
+            })
+            
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pull.number,
+              labels: ["no-changelog"]
+            })
+            
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+              body: reviewMessage,
+              event: "APPROVE",
+            })
+            
+            await github.rest.pulls.merge({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pull.number,
+              merge_method: "squash",
+              commit_title: "version rollout"
+            });
+            core.setOutput("pr-number", pull.number)
 
-      - name: "Delete staging branch"
-        run: |
-          git push origin -d ${{ env.staging_branch }}
+#      - name: Enable Pull Request Automerge
+#        run: gh pr merge --squash --auto "${{ steps.create-pr.outputs.pr-number }}"
+#        env:
+#          GH_TOKEN: ${{ github.token }}
+#
+
+#        run: |
+#          gh pr create --title "Staging APP rollout" --body "Auto created" --label "no-changelog" --base "fakemaster" --head "${{ env.staging_branch }}"
+#      - name: "Merge to release"
+#        run: |
+#          git config user.email ${{ secrets.ACTION_BOT_EMAIL }}
+#          git config user.name ${{ secrets.ACTION_BOT_NAME }}
+#          git merge --squash "origin/${{ env.staging_branch }}"
+#          git commit -m "release staging version: '${{ env.staging_branch }}'"
+#
+#      - name: "Push release"
+#        uses: ad-m/github-push-action@master
+#        with:
+#          branch: release
+#
+#      - name: "Delete staging branch"
+#        run: |
+#          git push origin -d ${{ env.staging_branch }}
