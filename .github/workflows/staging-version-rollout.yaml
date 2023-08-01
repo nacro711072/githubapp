@@ -1,0 +1,68 @@
+name: Rollout staging version
+
+on:
+  pull_request_review:
+    types: [ submitted ]
+
+jobs:
+  Merge-into-master:
+    if: github.event.review.state == 'approved'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Debug
+        uses: actions/github-script@v6
+        with:
+          script: |
+            console.log(context)
+      - name: "Merge to master"
+        uses: actions/github-script@v6
+        env:
+          PR_NUMBER: ${{ github.event.number }}
+        with:
+          script: |
+            const number = process.env.PR_NUMBER
+            const { data: pull } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: number,
+            })
+            
+            // Check label has "release"
+            const hasReleaseLabel = pull.labels.find(
+              (value) => { return value.name == "release"; }
+            ) === undefined
+            
+            if (hasReleaseLabel) {
+              await github.rest.pulls.merge({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: number,
+                merge_method: "squash",
+                commit_title: "version rollout"
+              });
+            }
+
+
+  Merge-master-into-release:
+    needs: [ Merge-into-master ]
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout repo"
+        uses: actions/checkout@v3
+        with:
+          ref: release
+          fetch-depth: 0
+
+      - name: "Merge"
+        run: |
+          git config user.email ${{ secrets.ACTION_BOT_EMAIL }}
+          git config user.name ${{ secrets.ACTION_BOT_NAME }}
+          
+          git fetch origin master
+          git merge origin/master
+
+      - name: "Push release"
+        uses: ad-m/github-push-action@master
+        with:
+          branch: release
