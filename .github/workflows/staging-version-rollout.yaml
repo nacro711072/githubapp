@@ -14,21 +14,17 @@ jobs:
         with:
           script: |
             console.log(context)
+            console.log(JSON.stringify(context.payload.pull_request.head))
+            console.log(JSON.stringify(context.payload.pull_request.labels))
+
       - name: "Merge to master"
         uses: actions/github-script@v6
-        env:
-          PR_NUMBER: ${{ github.event.number }}
         with:
           script: |
-            const number = process.env.PR_NUMBER
-            const { data: pull } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: number,
-            })
             
             // Check label has "release"
-            const hasReleaseLabel = pull.labels.find(
+            // const hasReleaseLabel = pull.labels.find(
+            const hasReleaseLabel = context.payload.pull_request.labels.find(
               (value) => { return value.name == "release"; }
             ) === undefined
             
@@ -36,9 +32,9 @@ jobs:
               await github.rest.pulls.merge({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                pull_number: number,
+                pull_number: context.issue.number,
                 merge_method: "squash",
-                commit_title: "version rollout"
+                commit_title: `version rollout: ${context.payload.pull_request.head.ref}`
               });
             }
 

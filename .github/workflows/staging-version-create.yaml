@@ -97,7 +97,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: pull.number,
-              labels: ["no-changelog"]
+              labels: ["no-changelog", "release"]
             })
                     
             core.setOutput("pr-number", pull.number)
