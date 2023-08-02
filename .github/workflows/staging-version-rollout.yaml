@@ -26,7 +26,7 @@ jobs:
             // const hasReleaseLabel = pull.labels.find(
             const hasReleaseLabel = context.payload.pull_request.labels.find(
               (value) => { return value.name == "release"; }
-            ) === undefined
+            ) !== undefined
             
             if (hasReleaseLabel) {
               await github.rest.pulls.merge({
