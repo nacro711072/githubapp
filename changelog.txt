@@ -1,0 +1,9 @@
+## 🐛 Bugfix
+
+- test changelog with label bug
+
+
+##Other
+- test changelog with no label
+- Test PR2
+- Another PR need merge to beta
